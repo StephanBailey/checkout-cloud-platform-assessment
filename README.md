@@ -21,8 +21,9 @@ associate it with the API Gateway.
 
 # Design Choices and Alternatives Rejected
 
-The full research trail (with citations) behind these lives in `docs/decision-log.md`. This is
-the condensed version: the decision, the alternative rejected, and why.
+The full research trail (with citations) behind these lives in
+[`decision_log.md`](decision_log.md). This is the condensed version: the decision, the
+alternative rejected, and why.
 
 ## API layer: internal ALB, not private API Gateway
 
