@@ -316,79 +316,24 @@ documentation before being accepted. I did not let it design the system; I direc
 file and rejected or corrected anything that didn't match a decision I'd already made or
 contradicted the brief.
 
-## Representative prompts
+I designed the architecture and recorded the technical decisions before implementation. I then
+used Claude as an implementation accelerator, working one file at a time. AI-generated output was
+reviewed against the architecture and AWS documentation and corrected where necessary. Examples
+of corrections included the OIDC trust structure, the CI/CD branching strategy, Lambda
+runtime/layer configuration, and IAM scope (the CI deploy role initially used a placeholder
+`AdministratorAccess` policy, since replaced with one scoped to the services this stack actually
+manages).
+
+Some of the prompts used:
 
 - "Start by telling me which file you think we should implement first and why. Do not generate
   multiple files at once."
-- One-file-at-a-time direction throughout (e.g. "Let's go with variables.tf", "Let's go with
-  network.tf", "Let's go to security.tf now") - I controlled build order, not the assistant.
-- "I would prefer the project name to be part of the locals.tf. This would be used across
-  environments, so we don't need to pass this in as a variable" - correcting a variable/local
-  split I disagreed with.
-- Pasting the actual assessment brief text mid-build to force a check of earlier assumptions
-  against the real grading criteria, which surfaced at least one direct contradiction (see below).
 - "Even though the brief says to add this gateway endpoint, I don't think we should, as it isn't
-  in use, and I don't want to create unnecessary infra" - explicit pushback against blindly
-  satisfying a brief line where I judged it added no real value.
-- "Is any of my Python code used in the upstix api relevant to how we use powertools here for
-  tracing and logs?" - pointing the assistant at my own existing code so new code matched my
-  established style instead of inventing a different one.
-- "On line 41, you can set default values in a .get method e.g. .get('body', {})" - a direct
-  code-style correction.
-- Told it explicitly that decision rationale must never be written into code comments - all
-  reasoning had to be surfaced to me in chat so it landed in this document, in my own words,
-  since I'm the one who has to defend it in interview.
-- "I want to use a pyproject.toml rather than a requirements.txt." - a packaging preference,
-  asked separately from the gating request below rather than bundled in.
+  in use, and I don't want to create unnecessary infra."
+- Decision rationale must never be written into code comments - all reasoning had to be surfaced
+  to me in chat so it landed in this document, in my own words.
 - "I want a gate between dev, nonprod, and prod. So when dev is merged into main, someone has to
   approve to go to nonprod, and then the same from nonprod to prod."
-- "Why are we using unittest and not pytest?" - queried a design choice rather than accepting it;
-  the answer was that `unittest.mock` is just the standard library's mocking toolkit used from
-  inside pytest-style tests, not `unittest.TestCase` - but I asked rather than assumed either way.
-- "Let's add some unit tests for Python."
-- "Let's also add some sensible outputs."
-- "Can you also add the KMS decision to the README.md, explicitly stating that I had researched
-  AWS-owned keys and the tradeoffs beforehand."
-- "Can you add number 9 [setup/deployment/teardown instructions] to the README.md as well."
-- "There is one correction I want to make. Merging to main should deploy to dev. Then we have
-  gates for nonprod and prod. You'll be able to see this in
-  ~/_git/<my_repo that I referenced>" - corrected the promotion flow by pointing at an
-  existing real workflow of mine, rather than accepting the assistant's first structure.
-
-## Critique of the output
-
-- **Over-permissive IAM, caught but not yet fixed**: the GitHub Actions OIDC deploy role
-  (`terraform/oidc.tf`) was attached to `AdministratorAccess` as a placeholder, with only a
-  `TODO` comment noting it should be scoped down. That's exactly the kind of over-permissive
-  default an assistant reaches for under time pressure, and it needs replacing with a policy
-  scoped to the specific services this stack manages before this could go anywhere near a real
-  account.
-- **Unverified/incorrect specifics in an earlier draft**: `lambda.tf` already contained a
-  `python3.14` runtime and a hardcoded Powertools Lambda layer ARN before this pass. Neither was
-  safe to trust as-is - `python3.14` support requires an AWS provider version we weren't pinned
-  to, and the specific layer ARN/version was unverifiable without checking AWS's docs directly.
-  I had it verify both against live sources rather than accept them, and switched the layer
-  reference to a dynamic SSM parameter lookup instead of a hardcoded ARN so it can't silently go
-  stale.
-- **No public endpoint was ever proposed** - the ALB stayed internal-scheme with no IGW/NAT
-  throughout, which I verified rather than assumed.
-- **Non-standard branching pattern suggested**: the first version of the promotion pipeline
-  invented a separate long-lived `dev` branch that auto-deployed on push, with `main` only
-  handling `nonprod`/`prod`. That's not how I actually work - a single trunk (`main`) with
-  `dev`/`nonprod`/`prod` promoted in sequence from the same merge is the real pattern, and I had
-  to point it at an existing workflow of mine to get it corrected rather than it inferring my
-  actual convention unprompted.
-- **Non-standard pattern check**: security group rules use the newer split
-  `aws_vpc_security_group_ingress_rule`/`egress_rule` resources rather than legacy inline
-  ingress/egress blocks, and the S3 bucket policy for ALB access logs uses the current
-  `logdelivery.elasticloadbalancing.amazonaws.com` service-principal method rather than the
-  deprecated per-region-account-ID legacy policy - both checked against current AWS docs rather
-  than assumed from training data.
-- **A claimed external fact was checked, not trusted**: before writing the OIDC trust policy I
-  had it verify a claim (from a LinkedIn post) that GitHub had changed its OIDC subject-claim
-  format to include immutable numeric IDs. It was true, but only for repos created after
-  2026-07-15 - it then pulled this repo's real owner/repo IDs via the GitHub API rather than
-  guessing, which is what's in the trust condition now.
-- **Recurring correction**: it kept writing decision rationale into Terraform/Python comments
-  ("why we chose X"). I had all of that stripped out and required it be surfaced to me in chat
-  instead, since this document - not the code - is what I need to defend.
+- "There is one correction I want to make. Merging to main should deploy to dev, then gate
+  nonprod and prod" - corrected the promotion flow against an existing real workflow of mine,
+  rather than accepting the assistant's first structure.

@@ -35,10 +35,109 @@ resource "aws_iam_role" "github_actions" {
   }
 }
 
-# TODO: scope this to exactly the actions this stack needs instead of
-# AdministratorAccess - kept broad here as a skeleton of the OIDC trust
-# pattern, not a hardened deploy policy.
-resource "aws_iam_role_policy_attachment" "github_actions_admin" {
+data "aws_iam_policy_document" "github_actions_deploy" {
+  statement {
+    sid    = "TerraformStateBackend"
+    effect = "Allow"
+
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:ListBucket",
+    ]
+
+    resources = [
+      "arn:aws:s3:::checkout-cloud-platform-assessment-tfstate",
+      "arn:aws:s3:::checkout-cloud-platform-assessment-tfstate/*",
+    ]
+  }
+
+  statement {
+    sid    = "InfrastructureServices"
+    effect = "Allow"
+
+    actions = [
+      "ec2:*",
+      "elasticloadbalancing:*",
+      "lambda:*",
+      "logs:*",
+      "sns:*",
+      "cloudwatch:*",
+      "ssm:*",
+      "acm:*",
+      "secretsmanager:*",
+      "sts:GetCallerIdentity",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "ProjectS3Buckets"
+    effect = "Allow"
+
+    actions   = ["s3:*"]
+    resources = ["arn:aws:s3:::${local.project_name}-*", "arn:aws:s3:::${local.project_name}-*/*"]
+  }
+
+  statement {
+    sid    = "IAMRoleManagementScoped"
+    effect = "Allow"
+
+    actions = [
+      "iam:CreateRole",
+      "iam:DeleteRole",
+      "iam:GetRole",
+      "iam:TagRole",
+      "iam:PutRolePolicy",
+      "iam:DeleteRolePolicy",
+      "iam:GetRolePolicy",
+      "iam:AttachRolePolicy",
+      "iam:DetachRolePolicy",
+      "iam:ListRolePolicies",
+      "iam:ListAttachedRolePolicies",
+    ]
+
+    resources = ["arn:aws:iam::*:role/${local.short_name}-*"]
+  }
+
+  statement {
+    sid    = "IAMPassRoleLambdaExecutionOnly"
+    effect = "Allow"
+
+    actions   = ["iam:PassRole"]
+    resources = ["arn:aws:iam::*:role/${local.short_name}-*-lambda-execution"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["lambda.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid    = "IAMOidcProviderScoped"
+    effect = "Allow"
+
+    actions = [
+      "iam:CreateOpenIDConnectProvider",
+      "iam:DeleteOpenIDConnectProvider",
+      "iam:GetOpenIDConnectProvider",
+      "iam:TagOpenIDConnectProvider",
+      "iam:UpdateOpenIDConnectProviderThumbprint",
+    ]
+
+    resources = ["arn:aws:iam::*:oidc-provider/token.actions.githubusercontent.com"]
+  }
+}
+
+resource "aws_iam_policy" "github_actions_deploy" {
+  name   = "${local.short_name}-${terraform.workspace}-deploy"
+  policy = data.aws_iam_policy_document.github_actions_deploy.json
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_deploy" {
   role       = aws_iam_role.github_actions.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+  policy_arn = aws_iam_policy.github_actions_deploy.arn
 }
