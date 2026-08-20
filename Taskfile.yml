@@ -1,0 +1,74 @@
+version: "3"
+
+vars:
+  TF_DIR: terraform
+  ENV: '{{.ENV | default "dev"}}'
+
+tasks:
+  tf:init:
+    dir: "{{.TF_DIR}}"
+    cmds:
+      - terraform init {{.CLI_ARGS}}
+
+  tf:workspace:
+    dir: "{{.TF_DIR}}"
+    preconditions:
+      - sh: '[ "{{.ENV}}" = "dev" ] || [ "{{.ENV}}" = "nonprod" ] || [ "{{.ENV}}" = "prod" ]'
+        msg: "ENV must be one of dev, nonprod, prod (got '{{.ENV}}')"
+    cmds:
+      - terraform workspace select -or-create {{.ENV}}
+
+  tf:fmt:
+    dir: "{{.TF_DIR}}"
+    cmds:
+      - terraform fmt -recursive {{.CLI_ARGS}}
+
+  tf:fmt:check:
+    dir: "{{.TF_DIR}}"
+    cmds:
+      - terraform fmt -check -recursive {{.CLI_ARGS}}
+
+  tf:validate:
+    dir: "{{.TF_DIR}}"
+    cmds:
+      - terraform init -backend=false
+      - terraform validate
+
+  tf:plan:
+    dir: "{{.TF_DIR}}"
+    cmds:
+      - task: tf:init
+      - task: tf:workspace
+      - terraform plan {{.CLI_ARGS}}
+
+  tf:apply:
+    dir: "{{.TF_DIR}}"
+    cmds:
+      - task: tf:init
+      - task: tf:workspace
+      - terraform apply {{.CLI_ARGS}}
+
+  tf:destroy:
+    dir: "{{.TF_DIR}}"
+    cmds:
+      - task: tf:init
+      - task: tf:workspace
+      - terraform destroy {{.CLI_ARGS}}
+
+  tf:test:
+    dir: "{{.TF_DIR}}"
+    cmds:
+      - task: tf:init
+      - terraform test {{.CLI_ARGS}}
+
+  py:install:
+    cmds:
+      - pip install -e ".[dev]"
+
+  py:lint:
+    cmds:
+      - ruff check src tests {{.CLI_ARGS}}
+
+  py:test:
+    cmds:
+      - pytest tests/unit {{.CLI_ARGS}}

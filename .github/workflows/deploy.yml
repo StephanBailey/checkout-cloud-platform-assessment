@@ -1,0 +1,84 @@
+name: Deploy
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - "src/**"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - "src/**"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        type: choice
+        required: true
+        options: [dev, nonprod, prod]
+      action:
+        description: "Terraform action"
+        type: choice
+        required: true
+        options: [plan, apply, destroy]
+
+jobs:
+  plan-on-pr:
+    if: github.event_name == 'pull_request'
+    concurrency:
+      group: terraform-plan-${{ github.ref }}
+      cancel-in-progress: true
+    uses: ./.github/workflows/task.yml
+    with:
+      environment: dev
+      action: plan
+    secrets: inherit
+
+  # Merging to main deploys to dev first - no approval gate, this is the
+  # lowest-risk environment.
+  deploy-dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: terraform-apply-dev
+      cancel-in-progress: false
+    uses: ./.github/workflows/task.yml
+    with:
+      environment: dev
+      action: apply
+    secrets: inherit
+
+  # Gated by the "nonprod" GitHub Environment's required reviewers rule
+  # (Settings > Environments > nonprod) - this job pauses for approval
+  # before it runs, the workflow doesn't need to express that itself.
+  deploy-nonprod:
+    needs: deploy-dev
+    concurrency:
+      group: terraform-apply-nonprod
+      cancel-in-progress: false
+    uses: ./.github/workflows/task.yml
+    with:
+      environment: nonprod
+      action: apply
+    secrets: inherit
+
+  # Same mechanism, gated by the "prod" environment's required reviewers,
+  # and only runs after deploy-nonprod succeeds.
+  deploy-prod:
+    needs: deploy-nonprod
+    concurrency:
+      group: terraform-apply-prod
+      cancel-in-progress: false
+    uses: ./.github/workflows/task.yml
+    with:
+      environment: prod
+      action: apply
+    secrets: inherit
+
+  dispatch:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/task.yml
+    with:
+      environment: ${{ inputs.environment }}
+      action: ${{ inputs.action }}
+    secrets: inherit

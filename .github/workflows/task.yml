@@ -1,0 +1,79 @@
+name: Terraform Task
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Target environment (dev, nonprod, prod)"
+        required: true
+        type: string
+      action:
+        description: "Terraform action (plan, apply, destroy)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: "3.x"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+
+      - run: task tf:fmt:check
+      - run: task tf:validate
+
+  terraform:
+    needs: lint
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: "3.x"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Terraform ${{ inputs.action }}
+        run: |
+          if [ "${{ inputs.action }}" = "plan" ]; then
+            task tf:plan ENV=${{ inputs.environment }}
+          else
+            task tf:${{ inputs.action }} ENV=${{ inputs.environment }} -- -auto-approve
+          fi
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: "3.x"
+
+      - run: task py:install
+      - run: task py:lint
+      - run: task py:test
