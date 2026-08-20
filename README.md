@@ -260,6 +260,13 @@ OIDC role exists in any real account yet (see the bootstrap chicken-and-egg prob
 Anyone checking the Actions tab will see failed runs, not successful deployments - that's
 expected, not a hidden problem.
 
+No AWS sandbox account was provided for this assessment. Deploying this for real would mean
+incurring genuine charges on a personal account for resources that aren't free-tier (interface
+endpoints, the ALB, Secrets Manager), with real risk of ongoing cost if teardown wasn't verified
+perfectly. Combined with already being well past this assessment's time-box, I chose to validate
+correctness statically (`terraform validate`, `tflint`, `fmt -check`, all passing) and document
+the plan/apply/teardown flow rather than execute it against a live account.
+
 - **Least-privilege IAM policy for the GitHub Actions deploy role.** Constraint: building a
   properly scoped policy for everything this stack manages (EC2/networking, ELB, Lambda,
   `iam:PassRole` scoped to the Lambda execution role, S3, Secrets Manager, SSM, ACM, CloudWatch,
