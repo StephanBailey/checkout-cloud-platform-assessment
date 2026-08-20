@@ -34,6 +34,11 @@ tasks:
       - terraform init -backend=false
       - terraform validate
 
+  tf:lint:
+    dir: "{{.TF_DIR}}"
+    cmds:
+      - tflint {{.CLI_ARGS}}
+
   tf:plan:
     dir: "{{.TF_DIR}}"
     cmds:

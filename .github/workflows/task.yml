@@ -30,8 +30,11 @@ jobs:
         with:
           terraform_version: "~1.10"
 
+      - uses: terraform-linters/setup-tflint@v6
+
       - run: task tf:fmt:check
       - run: task tf:validate
+      - run: task tf:lint
 
   terraform:
     needs: lint
