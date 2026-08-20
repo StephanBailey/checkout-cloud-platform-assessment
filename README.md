@@ -15,7 +15,9 @@ associate it with the API Gateway.
 
 # Infrastructure Diagram
 
-![Checkout infrastructure architecture](images/checkout_infrastructure.jpg)
+![Checkout infrastructure architecture](images/checkout_infra.jpg)
+
+(Previous version is still available in images/)
 
 # Encryption and Key Management
 
